@@ -1,0 +1,119 @@
+﻿modoptions_techpopups_enabled=启用
+
+modoptions_techpopups_bhop_maxhold=Bhop Max Hold (厘秒)
+
+modoptions_techpopups_bhop_airtime=Bhop Air Window (厘秒)
+
+modoptions_techpopups_bhop_landjump=Bhop Land Window (厘秒)
+
+modoptions_techpopups_backboost_maxtime=Backboost Window (厘秒)
+
+modoptions_techpopups_hyper_enabled=Hyper
+
+modoptions_techpopups_super_enabled=Super
+
+modoptions_techpopups_dreamgrab_enabled=果冻反抓（Dream Grab）
+
+modoptions_techpopups_dreamjump_enabled=果冻跳（Dream Jump）
+modoptions_techpopups_dreamdoublejump_enabled=果冻双跳（Dream Double Jump）
+
+modoptions_techpopups_coretech_enabled=岩浆块Super / Hyper（Core Super / Hyper）
+
+modoptions_techpopups_dreamtech_enabled=果冻Super / Hyper（Dream Super / Hyper）
+
+modoptions_techpopups_transitiondash_enabled=Transition Dash
+
+modoptions_techpopups_reformtech_enabled=方块刷新技巧（Reform Tech）
+
+modoptions_techpopups_archie_enabled=Archie
+
+modoptions_techpopups_dreamsmuggle_enabled=带抓取物进果冻（Dream Smuggle）
+
+modoptions_techpopups_crouchdash_enabled=下蹲冲刺（Crouch Dash）
+
+modoptions_techpopups_cornerboost_enabled=cb（Cornerboost）
+
+modoptions_techpopups_backboost_enabled=反丢加速（Backboost）
+
+modoptions_techpopups_wallbounce_enabled=Wallbounce
+
+modoptions_techpopups_ultra_enabled=Ultra
+
+modoptions_techpopups_bunnyhop_enabled=兔子跳（Bunnyhop）
+
+modoptions_techpopups_dreamdoublejump_conversion_enabled=Dream Double Jump 显示
+
+modoptions_techpopups_reverse_prefix_enabled=Reverse 前缀
+
+modoptions_techpopups_wavedash_conversion_enabled=Wavedash 显示
+
+modoptions_techpopups_demohyper_conversion_enabled=Demohyper 显示
+
+modoptions_techpopups_delayed_wallbounce_conversion_enabled=Delayed Wallbounce 显示
+
+modoptions_techpopups_popup_fadeintime=渐入时长 (厘秒)
+
+modoptions_techpopups_popup_holdtime=停留时长 (厘秒)
+
+modoptions_techpopups_popup_fadeouttime=渐出时长 (厘秒)
+
+modoptions_techpopups_popup_baselinespeed=基准速度
+
+modoptions_techpopups_popup_speedscale=速度加成
+
+modoptions_techpopups_neutraljump_enabled=中性跳（Neutral Jump）
+
+modoptions_techpopups_neutral_cooldown=Neutral Jump 冷却 (厘秒)
+
+modoptions_techpopups_overclock_enabled=Overclock
+
+modoptions_techpopups_submenu_popupsettings=技巧框外观
+modoptions_techpopups_popup_scale=技巧框大小 (%)
+modoptions_techpopups_popup_displaymode=显示内容
+modoptions_techpopups_popup_labeloffset=头顶高度
+modoptions_techpopups_popup_perchar=逐字动画
+modoptions_techpopups_popup_edgemargin=贴边留白
+modoptions_techpopups_popup_glass=玻璃底板
+modoptions_techpopups_popup_glasstrans=背景透明度
+modoptions_techpopups_popup_glassblur=把框底后面的画面糊掉
+modoptions_techpopups_popup_glassblurstrength=模糊强度
+
+modoptions_techpopups_spiketech_enabled=Spike Tech
+
+modoptions_techpopups_chainedbunnyhop_enabled=Chained Bunnyhop
+modoptions_techpopups_chainedultra_enabled=连续Ultra（Chained Ultra）
+modoptions_techpopups_chain_window=连招窗口 (厘秒)
+modoptions_techpopups_delayedultra_enabled=Delayed Ultra
+modoptions_techpopups_delayedultra_window=Delayed Ultra 阈值
+
+modoptions_techpopups_submenu_panelsettings=技巧面板
+modoptions_techpopups_panel_enabled=启用技巧面板
+modoptions_techpopups_panel_port=面板端口
+modoptions_techpopups_demodash_naming=叫它 Demodash
+modoptions_techpopups_midairsuper_enabled=空中Super（Mid-air Super）
+modoptions_techpopups_extended_enabled=充能Super / Hyper（Extended Super / Hyper）
+modoptions_techpopups_groundedultra_enabled=平地Ultra（Grounded Ultra）
+modoptions_techpopups_crouchclimb_enabled=蹲姿爬墙（Crouch Climb）
+modoptions_techpopups_neutraldrop_enabled=中性下放（Neutral Drop）
+modoptions_techpopups_launchboost_enabled=超级弹（Explosion Boost）
+modoptions_techpopups_wallboost_enabled=偷体力抓跳（Wallboost）
+modoptions_techpopups_retentiontech_enabled=Retention Tech
+modoptions_techpopups_doubleblockboost_enabled=双重机关加速（Double Block Boost）
+modoptions_techpopups_reversecornerboost_enabled=rcb（Reverse Cornerboost）
+modoptions_techpopups_jellyregrab_enabled=Jelly Regrab
+modoptions_techpopups_theoregrab_enabled=Theo Regrab
+modoptions_techpopups_jellyvator_enabled=Jellyvator
+modoptions_techpopups_theovator_enabled=Theovator
+modoptions_techpopups_fastbubble_enabled=泡泡快启（Fast Bubble）
+modoptions_techpopups_cornerkick_enabled=咖啡跳（Corner Kick）
+modoptions_techpopups_ceilingpop_enabled=cp（Ceiling Pop）
+modoptions_techpopups_cassetteboost_enabled=节奏块加速（Cassette Block Boost）
+modoptions_techpopups_waterboost_enabled=水面加速（Water Boost）
+modoptions_techpopups_featherboost_enabled=Featherboost
+modoptions_techpopups_panel_open=立即打开技巧面板
+
+modoptions_techpopups_submenu_techsettings=技巧开关
+
+modoptions_techpopups_submenu_timingsettings=判定时机
+
+modoptions_techpopups_submenu_miscsettings=杂项设置

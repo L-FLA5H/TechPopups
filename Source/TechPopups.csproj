@@ -1,0 +1,77 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <AssemblyName>TechPopups</AssemblyName>
+        <RootNamespace>Celeste.Mod.TechPopups</RootNamespace>
+        <LangVersion>latest</LangVersion>
+        <CelestePrefix Condition="'$(CelestePrefix)' == '' And Exists('..\..\..\Celeste.dll')">..\..\..</CelestePrefix>
+        <CelestePrefix Condition="'$(CelestePrefix)' == ''">lib-stripped</CelestePrefix>
+    </PropertyGroup>
+
+    <ItemDefinitionGroup>
+        <PackageReference PrivateAssets="all" ExcludeAssets="runtime"/>
+        <Reference Private="false"/>
+    </ItemDefinitionGroup>
+
+    <ItemGroup>
+        <Compile Remove="..\Celeste_Decompiled\**\*.cs" />
+        <None Remove="..\Celeste_Decompiled\**\*" />
+        <Content Remove="..\Celeste_Decompiled\**\*" />
+        <EmbeddedResource Remove="..\Celeste_Decompiled\**\*" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="25.2.3" PrivateAssets="all" ExcludeAssets="runtime"/>
+        <PackageReference Include="MonoMod.Patcher" Version="25.0.0-prerelease.2"/>
+        <PackageReference Include="CelesteAnalyzer" Version="*"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CelesteMod.Publicizer" Version="*" CelesteAssembly="$(CelestePrefix)\Celeste.dll"/>
+        <Reference Include="$(CelestePrefix)/MMHOOK_Celeste.dll" Private="false"/>
+        <Reference Include="$(CelestePrefix)/FNA.dll" Private="false"/>
+    </ItemGroup>
+
+    <!-- The out-of-game tech picker. Embedded so it ships inside the DLL and
+         can never get lost next to the mod folder. -->
+    <ItemGroup>
+        <EmbeddedResource Include="Panel\TechPanel.html" />
+    </ItemGroup>
+
+    <Target Name="CopyFiles" AfterTargets="Build" Inputs="$(OutputPath)\$(AssemblyName).dll;$(OutputPath)\$(AssemblyName).pdb" Outputs="..\bin\$(AssemblyName).dll;..\bin\$(AssemblyName).pdb">
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="..\bin"/>
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="..\bin"/>
+    </Target>
+
+    <!-- 注意：这里相对于「Source\」目录。上一级就是 mod 根目录本身。
+         以前写成 ..\TechPopups\ ，结果多套了一层 Mods\TechPopups\TechPopups\，
+         那个嵌套目录里也有一份 everest.yaml + Graphics，会被 Everest 当成重复的 mod。 -->
+    <Target Name="StageModFolder" AfterTargets="CopyFiles">
+        <PropertyGroup>
+            <ModStageDir>..\</ModStageDir>
+        </PropertyGroup>
+
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(ModStageDir)bin"/>
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="$(ModStageDir)bin"/>
+
+        <Copy SourceFiles="..\everest.yaml" DestinationFolder="$(ModStageDir)"/>
+
+        <ItemGroup>
+            <DialogFiles Include="..\Dialog\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(DialogFiles)" DestinationFolder="$(ModStageDir)Dialog\%(RecursiveDir)"/>
+
+        <ItemGroup>
+            <GraphicsFiles Include="..\Graphics\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(GraphicsFiles)" DestinationFolder="$(ModStageDir)Graphics\%(RecursiveDir)"/>
+
+        <Message Text="Mod staged at: $(ModStageDir)" Importance="high"/>
+    </Target>
+
+    <PropertyGroup>
+        <PathMap>$(MSBuildProjectDirectory)=TechPopups/</PathMap>
+    </PropertyGroup>
+
+</Project>
