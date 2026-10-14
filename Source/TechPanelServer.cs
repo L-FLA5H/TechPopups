@@ -27,6 +27,14 @@ public static class TechPanelServer
     private static volatile bool running;
     private static volatile string cachedJson = "{\"techs\":[]}";
 
+    // Icon PNGs for the panel's cards. The folder is resolved once, on the main
+    // thread, when the server starts - the request thread must never go digging
+    // through mod metadata while the game is running. The bytes themselves are
+    // static files, so caching them is pure IO and safe from any thread.
+    private static volatile string iconDir;
+    private static readonly Dictionary<string, byte[]> iconCache = new();
+    private static readonly object iconLock = new();
+
     private static readonly object queueLock = new object();
     private static readonly List<KeyValuePair<string, bool>> pendingWrites = new();
     private static readonly List<KeyValuePair<string, int>> pendingVisualWrites = new();
@@ -37,6 +45,7 @@ public static class TechPanelServer
 
     public static void Start() {
         Stop();
+        iconDir = ResolveIconDir();
         try {
             int port = TechPopupsModule.Settings.Panel.Port;
             Url = "http://" + PrefixHost + ":" + port + "/";
@@ -159,7 +168,92 @@ public static class TechPanelServer
             return;
         }
 
+        if (path == "icon") {
+            ServeIcon(ctx, req.QueryString["name"] ?? "");
+            return;
+        }
+
         Respond(ctx, LoadHtml(), "text/html; charset=utf-8");
+    }
+
+    // ---- card icons --------------------------------------------------------
+
+    // Where the icon PNGs live. Tried in two shapes because PathDirectory points
+    // at the mod's own folder normally, but a mod loaded from a .zip or from a
+    // non-standard layout still has a copy under Mods/<name>/.
+    private static string ResolveIconDir() {
+        string rel = Path.Combine("Graphics", "Atlases", "Gui", "techpopups", "icons");
+        try {
+            var meta = TechPopupsModule.Instance?.Metadata;
+            if (meta != null) {
+                string a = string.IsNullOrEmpty(meta.PathDirectory)
+                    ? null : Path.Combine(meta.PathDirectory, rel);
+                if (a != null && Directory.Exists(a)) return a;
+
+                if (!string.IsNullOrEmpty(meta.Name)) {
+                    string b = Path.Combine(Everest.PathGame, "Mods", meta.Name, rel);
+                    if (Directory.Exists(b)) return b;
+                }
+            }
+        } catch (Exception e) {
+            Logger.Warn("TechPopups", "icon folder lookup failed: " + e.Message);
+        }
+        Logger.Warn("TechPopups", "tech panel could not find the icon folder - "
+                                + "cards will fall back to letter badges");
+        return null;
+    }
+
+    private static void ServeIcon(HttpListenerContext ctx, string name) {
+        string dir = iconDir;
+        if (dir == null) { NotFound(ctx); return; }
+
+        // The name comes from a browser, so treat it as untrusted input. A slash
+        // is expected and harmless ("Dream Super / Hyper"); CandidateFiles
+        // flattens it into a space exactly like the in-game lookup does. Anything
+        // that could climb out of the icon folder is refused outright.
+        if (name.Length == 0 || name.Length > 64 || name.Contains("..")) {
+            NotFound(ctx); return;
+        }
+        foreach (char c in name) {
+            if (c == '\\' || c == ':' || c == '*' || c == '?' || c == '"'
+                || c == '<' || c == '>' || c == '|') {
+                NotFound(ctx); return;
+            }
+        }
+
+        byte[] png;
+        lock (iconLock) {
+            if (!iconCache.TryGetValue(name, out png)) {
+                png = null;
+                foreach (string file in TechIconLoader.CandidateFiles(name)) {
+                    string full = Path.Combine(dir, file);
+                    try {
+                        if (File.Exists(full)) { png = File.ReadAllBytes(full); break; }
+                    } catch { }
+                }
+                // A miss is cached too: without it every unknown name re-walks
+                // the disk on each panel reload.
+                iconCache[name] = png;
+            }
+        }
+        if (png == null) { NotFound(ctx); return; }
+
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "image/png";
+        ctx.Response.ContentLength64 = png.Length;
+        // Static art: let the browser keep it, so a panel reload does not pull
+        // 47 PNGs again.
+        ctx.Response.AddHeader("Cache-Control", "max-age=300");
+        ctx.Response.OutputStream.Write(png, 0, png.Length);
+        ctx.Response.OutputStream.Close();
+    }
+
+    private static void NotFound(HttpListenerContext ctx) {
+        try {
+            ctx.Response.StatusCode = 404;
+            ctx.Response.ContentLength64 = 0;
+            ctx.Response.Close();
+        } catch { }
     }
 
     private static void Respond(HttpListenerContext ctx, string body, string type) {

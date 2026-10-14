@@ -8,6 +8,12 @@ public enum PopupDisplayMode {
 
 public class TechPopupsSettings : EverestModuleSettings
 {
+    // The picker is the recommended way to configure everything on this page,
+    // so its entry sits at the very top: switch techniques on and off there
+    // instead of walking the list below one checkbox at a time.
+    [SettingName("modoptions_techpopups_submenu_panelsettings")]
+    public PanelSettings Panel { get; set; } = new PanelSettings();
+
     [SettingName("modoptions_techpopups_enabled")]
     public bool Enabled { get; set; } = true;
 
@@ -63,6 +69,9 @@ public class TechPopupsSettings : EverestModuleSettings
 
         [SettingName("modoptions_techpopups_archie_enabled")]
         public bool ArchieEnabled { get; set; } = true;
+
+        [SettingName("modoptions_techpopups_dashbounce_enabled")]
+        public bool DashBounceEnabled { get; set; } = true;
 
         [SettingName("modoptions_techpopups_transitiondash_enabled")]
         public bool TransitionDashEnabled { get; set; } = true;
@@ -239,6 +248,7 @@ public class TechPopupsSettings : EverestModuleSettings
         // the previous one of the same kind is announced as a chained variant.
         [SettingName("modoptions_techpopups_chain_window")]
         [SettingRange(1, 300, true)]
+        [SettingSubText("modoptions_techpopups_chain_window_sub")]
         public int ChainWindowCs { get; set; } = 85;
         public float ChainWindow => ChainWindowCs * 0.01f;
 
@@ -248,17 +258,18 @@ public class TechPopupsSettings : EverestModuleSettings
         // this is a knob rather than a fact, and the whole thing defaults off.
         [SettingName("modoptions_techpopups_delayedultra_window")]
         [SettingRange(1, 300, true)]
+        [SettingSubText("modoptions_techpopups_delayedultra_window_sub")]
         // Counted from the frame the DASH ENDS, not from the frame it starts -
-        // during the dash nothing is being stored, and a plain Ultra lands either
-        // during the dash or in the handful of frames right after it (well under
-        // 0.1 s of storing). Anything that keeps the boost for longer than this
-        // was carried somewhere else first, which is the wiki's Delayed Ultra.
-        // 50 cs = half a second. It was 35, and the player had dialled it down to 10,
-        // which is short enough that an ordinary Ultra landing a couple of frames
-        // after the dash ends reads as a Delayed one. A Delayed Ultra is supposed to
-        // mean the 1.2x was carried somewhere else first (cornerboost, zip, stall) -
-        // half a second is about where that becomes true rather than incidental.
-        public int DelayedUltraWindowCs { get; set; } = 50;
+        // during the dash nothing is being stored.
+        // History: 35 -> dialled down to 10 -> back up to 50 -> 15 now. At 50 a
+        // real Du kept coming out as a plain Ultra ("调短"), and at 10 an
+        // ordinary Ultra landing a couple of frames after the dash ends read as
+        // a Du. 15 cs / 0.15 s is the middle: a plain Ultra lands during the
+        // dash or within a handful of frames of it (well under 0.1 s), while a
+        // Delayed Ultra is one carried somewhere else first, which costs more
+        // than that. Still a slider - nudge it in the mod options if a specific
+        // route sits on the boundary.
+        public int DelayedUltraWindowCs { get; set; } = 15;
         public float DelayedUltraWindow => DelayedUltraWindowCs * 0.01f;
     }
 
@@ -312,6 +323,7 @@ public class TechPopupsSettings : EverestModuleSettings
         // like a solid plate.
         [SettingName("modoptions_techpopups_popup_glasstrans")]
         [SettingRange(0, 100, true)]
+        [SettingSubText("modoptions_techpopups_popup_glasstrans_sub")]
         public int GlassTransparencyPct { get; set; } = 30;
 
         // 1 = full-strength glass, 0 = nothing drawn at all. Applied to every
@@ -375,6 +387,7 @@ public class TechPopupsSettings : EverestModuleSettings
         // where a label is on screen. Switch it off if your machine dislikes it;
         // the pill falls straight back to the flat glass body.
         [SettingName("modoptions_techpopups_popup_glassblur")]
+        [SettingSubText("modoptions_techpopups_popup_glassblur_sub")]
         public bool GlassBlur { get; set; } = true;
 
         // How far the frost reaches. The level is blurred at its native 320x180,
@@ -416,9 +429,6 @@ public class TechPopupsSettings : EverestModuleSettings
         public bool DemodashNaming { get; set; } = false;
     }
 
-    [SettingName("modoptions_techpopups_submenu_panelsettings")]
-    public PanelSettings Panel { get; set; } = new PanelSettings();
-
     [SettingSubMenu]
     public class PanelSettings
     {
@@ -429,6 +439,7 @@ public class TechPopupsSettings : EverestModuleSettings
 
         [SettingName("modoptions_techpopups_panel_port")]
         [SettingRange(30000, 40000)]
+        [SettingSubText("modoptions_techpopups_panel_port_sub")]
         public int Port { get; set; } = 32274;
 
         // Fake checkbox: the getter always reads false so the box never stays
@@ -436,6 +447,7 @@ public class TechPopupsSettings : EverestModuleSettings
         // panel in your browser. This is the standard Everest trick for a button
         // inside a settings menu.
         [SettingName("modoptions_techpopups_panel_open")]
+        [SettingSubText("modoptions_techpopups_panel_open_sub")]
         public bool OpenNow {
             get { return false; }
             set {

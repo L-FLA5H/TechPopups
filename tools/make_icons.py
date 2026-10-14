@@ -133,6 +133,23 @@ def m_disc(m, cx, cy, r):
                 m[gy][gx] = True
 
 
+def m_quadrant(m, cx, cy, r, a0, a1):
+    """以 (cx,cy) 为圆心的扇形块。角度是屏幕坐标（y 向下）：0=右 90=下 180=左 270=上。
+
+    用来画 Cornerboost 那种「缺了一角的圆盘」—— 原版右下角那块深色圆角就是它。
+    """
+    for gy in range(G):
+        for gx in range(G):
+            px, py = gx + 0.5 - cx, gy + 0.5 - cy
+            if math.hypot(px, py) > r:
+                continue
+            a = math.degrees(math.atan2(py, px))
+            while a < a0:
+                a += 360.0
+            if a <= a1:
+                m[gy][gx] = True
+
+
 def m_roundrect(m, x0, y0, x1, y1, r):
     for gy in range(G):
         for gx in range(G):
@@ -567,17 +584,96 @@ def corner_kick():
 
 
 def ceiling_pop():
-    """Ceiling Pop：抓墙滑到墙的最底端以下，那一帧抓跳扑空 -> 变成向前冲。
+    """Ceiling Pop（cp）：斜下冲向一个墙角。
 
-    墙的下端露出来，人在墙下方；箭头是**近乎水平**的（cpop 给的是前向动量），
-    这一点和 Corner Kick 的斜向上箭头刚好区分开。
+    第三版。第一版「短墙 + 近乎水平的箭头」跟 Corner Kick 分不开；第二版肘形不够直白；
+    第三版把朝向摆对了、主体也居中了，但墙角在左边 —— 现在整张**左右镜像**：
+    墙角在右侧，箭头从左上斜下指向它。主体按圆面中心重新摆过（重心 y≈15）。
     """
     w = new_mask()
-    wall_bar(w, x=4.4, y0=3.0, y1=17.4, wdt=4.4)
+    wall_bar(w, x=22.6, y0=7.6, y1=20.8, wdt=5.0)
 
     a = new_mask()
-    m_arrow(a, 9.4, 22.6, 27.0, 20.2, 2.9, 6.4, 4.6)
+    m_arrow(a, 7.2, 10.0, 20.4, 19.6, 2.9, 6.4, 4.6)       # 从左上斜下指向墙角
     return [stone(w), flow(a)]
+
+
+def dash_bounce():
+    """Dash Bounce：一道斜下冲，接一个弹起来的拱。
+
+    形状就是一根**斜下的冲**接一个**开口朝下的半圆**（像字母 n），
+    两段连成一条轨迹、一个材质（flow 青）—— 它是「一段运动」，
+    不是一个物件加一支箭头。
+    """
+    a = new_mask()
+    m_line(a, 5.6, 9.2, 11.4, 15.0, 2.8)                  # 斜下冲：左上 -> 右下（45°）
+    m_arc(a, 16.4, 15.0, 5.0, 2.8, 180.0, 360.0)          # 弹起来的拱（开口朝下）
+    m_arrow(a, 21.4, 15.0, 25.2, 23.0, 2.8, 6.0, 4.4)     # 拱的这一头收在右下
+    return [flow(a)]
+
+def reverse_cornerboost():
+    """Reverse Cornerboost（rcb）：斜上通过一个墙角。
+
+    和 Corner Kick 同一套语言 —— 墙**从上往下**、下端（墙角）露在画面里，
+    箭头从那个墙角斜上出去。差别只在**箭头更缓**：Corner Kick 那支约 40°，
+    rcb 这支约 26°。
+    """
+    w = new_mask()
+    wall_bar(w, x=3.4, y0=1.4, y1=17.2, wdt=4.8)
+
+    a = new_mask()
+    m_arrow(a, 9.0, 19.4, 26.0, 11.0, 2.9, 6.4, 4.6)      # 约 26°，从墙角斜上
+    return [stone(w), flow(a)]
+
+def _super_hyper_arrows(left_x):
+    """「Super / Hyper」这几张成对条目共用的两支箭头。
+
+    斜上那支是 Super（金），平前那支是 Hyper（青）。一金一青是为了能分开 ——
+    同色、或者贴太近，30 像素下就是两块糊在一起的亮斑。
+    `left_x` 是箭头起点，留了起跳面（果冻 / 岩浆块）的版本要往右让一截。
+    """
+    up = new_mask()
+    m_arrow(up, left_x, 13.6, left_x + 8.4, 5.0, 2.5, 5.4, 4.0)      # Super：斜上
+
+    hy = new_mask()
+    m_arrow(hy, left_x, 20.6, left_x + 13.4, 20.6, 2.5, 5.4, 4.0)    # Hyper：平前
+    return up, hy
+
+
+def extended_super_hyper():
+    """Extended Super / Hyper（充能Super / Hyper）：冲刺冷却在冲刺还没结束前就
+    走完了，于是「跳出去」和「补回来的那一下冲刺」同时成立。
+
+    这条不依赖任何实体，所以左边没有起跳面，箭头可以从最左边起。
+    """
+    up, hy = _super_hyper_arrows(6.6)
+    return [gold(up), flow(hy)]
+
+
+def dream_super_hyper():
+    """Dream Super / Hyper（果冻Super / Hyper）：果冻给的两种起跳。
+
+    左边一颗果冻（金），右边两支箭头。果冻往左下让开一点，免得和金色箭头
+    糊成同一块亮斑（第一版就是这么糊掉的）。跟 Core Super / Hyper 完全对称，
+    只有那个「起跳面」不一样 —— 并排看就是一句话：换个东西起跳。
+    """
+    j = new_mask()
+    jelly_body(j, 7.4, 18.0, 3.4)
+
+    up, hy = _super_hyper_arrows(14.0)
+    return [gold(j), gold(up), flow(hy)]
+
+
+def core_super_hyper():
+    """Core Super / Hyper（岩浆块Super / Hyper）：岩浆块被顶起来时给的两种起跳。
+
+    和 Dream Super / Hyper 同一个版式，只把果冻换成石色的岩浆块。
+    """
+    b = new_mask()
+    m_roundrect(b, 4.8, 12.6, 12.0, 19.4, 1.4)             # 岩浆块
+
+    up, hy = _super_hyper_arrows(14.0)
+    return [stone(b), gold(up), flow(hy)]
 
 
 def grounded_ultra_cancel():
@@ -633,6 +729,17 @@ TODO = [
     ("Ceiling Pop", PLATE_WALL, ceiling_pop),
     ("Grounded Ultra", PLATE_ENTITY, grounded_ultra_cancel),
     ("Double Block Boost", PLATE_ENTITY, double_block_boost),
+    ("Dash Bounce", PLATE_DASH, dash_bounce),
+    # 原来这张靠「去掉 reverse 前缀」复用 Cornerboost 的图，看不出是反向的，
+    # 现在给它一张自己的（左边那个缺口圆角镜像过来）。
+    ("Reverse Cornerboost", PLATE_DASHLESS, reverse_cornerboost),
+    # 下面三张的文件名**故意不含斜杠**：面板/弹窗里这三个条目的名字带 " / "
+    # （"Dream Super / Hyper"），而图标查找会把斜杠拍成空格再合并连续空格
+    # （见 TechIconLoader.Variants 的 Collapse），所以文件名必须写成
+    # "Dream Super Hyper.png" 才命中。写回去带斜杠反而找不到。
+    ("Extended Super Hyper", PLATE_DASH, extended_super_hyper),
+    ("Dream Super Hyper", PLATE_ENTITY, dream_super_hyper),
+    ("Core Super Hyper", PLATE_ENTITY, core_super_hyper),
 ]
 
 # 「Crouch Dash」和「Demodash」是同一个技巧的两个名字（设置里可切换），

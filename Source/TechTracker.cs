@@ -67,6 +67,15 @@ public static class TechTracker {
     // has landed and is standing on the ground in *both* cases, which is why
     // testing self.onGround at jump time labelled every ultra a Grounded Ultra.
     private static bool  ultraDashOnGround;
+    // Whether THIS ground contact has already stamped ultraLandTime. Kept apart
+    // from ultraDucked, which means "there is an ultra waiting to be cashed in".
+    // They used to be the same flag, and that is what broke Delayed Ultra
+    // across a room border: a down-diagonal dash usually lands at once, so the
+    // stamp was already taken on the previous screen, and the landing on the
+    // next one was refused. ultraLandTime stayed behind on the old screen, the
+    // measured delay came out near zero, and the DU was reported as a plain
+    // Ultra. Cleared on leaving the ground, so every landing stamps once.
+    private static bool  landStamped;
     // chainClock reading for the current ultra: the moment the crouch (the
     // "ultra" itself) actually landed.
     // Vanilla applies the 1.2x speed multiplier inside Player.OnCollideV:
@@ -96,6 +105,33 @@ public static class TechTracker {
     // evidence is the dash itself. A grounded down-diagonal dash IS the setup.
     private static float ultraCarryTime = -999f;
     private const float GroundedUltraCarryWindow = 0.6f;
+
+    // ---- Grounded Ultra, the "interrupted dash" arm ------------------------
+    // The player's own description of the trick (2026-10-14), and it is better
+    // than anything derived from speeds:
+    //
+    //   "GU doesn't have to come from one ultra plus a down-diagonal dash - it
+    //    can also be several ultras stacked. The key is NOT the 380-400 speed,
+    //    because speed stacks without limit. The key is whether, at high speed,
+    //    you dashed diagonally down toward the ground and that dash was then
+    //    interrupted by a bounce or a throwable, so the speed was kept."
+    //
+    // So the signature is three facts, none of them a magic number:
+    //   * a down-diagonal dash happened            -> lastDownDiagDashTime
+    //   * it was still live when the entity hit    -> self.DashAttacking
+    //   * the speed is above the ultra bar (240)   -> Speed.LengthSquared
+    // A bouncing-off-a-snowball check that reads 380-400 would only ever catch
+    // the first ultra of a chain; this catches the tenth one too.
+    private static float lastDownDiagDashTime = -999f;
+    // The dash attack itself only lives ~0.3 s, so this is slack on top of it,
+    // not the real gate - it just keeps a stale stamp from ever matching.
+    private const float GroundedUltraInterruptWindow = 0.5f;
+
+    private static bool DashInterruptedByEntity(Player self, bool dashWasLive, float speedSq) {
+        return dashWasLive
+            && chainClock - lastDownDiagDashTime <= GroundedUltraInterruptWindow
+            && speedSq > 57600f;          // 240, the game's own ultra bar
+    }
 
     // ---- Double Block Boost (双重机关加速) --------------------------------
     // A moving block ("Kevin") hands its velocity to Madeline: Player.Jump is
@@ -198,6 +234,20 @@ public static class TechTracker {
     private static float potentialCornerBoostTimer;
     // Our own copy of the speed direction to boost
     private static float cbRetainedSpeed;
+    // Which side the wall is on, snapshotted when the arm happens.
+    //
+    // This is what makes Reverse Cornerboost work at all. The confirm geometry
+    // below (wall gone at her height, wall still there a few pixels lower) is
+    // only meaningful around the wall she is actually leaving, and for an rcb
+    // that wall is on the Facing side while her momentum points the other way -
+    // TASVideos: "If you are going right and getting close to a wall on your
+    // left, you can press left+jump+grab ... you will get the speed boost but
+    // toward the wall". Deriving the direction from cbRetainedSpeed instead
+    // (which is what this used to do) pointed the whole test at the *empty* side
+    // of an rcb, so the geometry never matched and the rcb stayed silent.
+    // Facing is the right source: a climbjump only ever happens on the wall she
+    // is facing, and for a forward cornerboost Facing and the momentum agree.
+    private static int cbWallDir;
     // Position where cornerboost was armed; used to verify the player actually
     // climbed past a corner rather than simply detaching from a straight wall.
     private static Vector2 cbArmPos;
@@ -205,6 +255,38 @@ public static class TechTracker {
         typeof(Player).GetField("wallSpeedRetentionTimer", BindingFlags.NonPublic | BindingFlags.Instance);
     private static readonly FieldInfo FI_wallSpeedRetained =
         typeof(Player).GetField("wallSpeedRetained",      BindingFlags.NonPublic | BindingFlags.Instance);
+
+    // Dash Bounce
+    // Wiki: "a wallbounce hands out up to 18 frames of constant vertical speed,
+    // but a dash only lasts 15. If a wallbounce is interrupted by another dash
+    // within its first 2 frames, the vertical speed survives past the end of
+    // that dash" - a wallbounce cancel. Interrupting it with a DOWN-DIAGONAL
+    // dash also keeps the horizontal speed, and that one is called a Dash
+    // Bounce. Only that case is reported; every other wallbounce cancel is left
+    // alone on purpose.
+    private static float wallbounceTime = -999f;
+    // The gym's own number is 2 frames, but this is measured at StartDash (the
+    // frame the second dash is initiated) rather than at the frame it starts
+    // moving, and dash presses go through the input buffer - so anything from
+    // the same frame up to three frames later is a real bounce. 4 frames is
+    // deliberately one frame of slack on top of that; a wallbounce followed by a
+    // down-diagonal dash within 4 frames is the tech or it is nothing.
+    private const float DashBounceWindow = 0.07f;
+    // Armed by Player_StartDash (that is when the dash is initiated, so that is
+    // the frame the 2-frame window has to be measured on) and cashed in by
+    // Player_Update once the game has actually published DashDir.
+    //
+    // It has to be split like that: StartDash is not where the dash direction
+    // exists yet. Decompiled: DashBegin sets `DashDir = Vector2.Zero`, and the
+    // real value only appears one frame later in the dash coroutine's body
+    // (`DashDir = lastAim` put through CorrectDashPrecision). DashUpdate keeps
+    // it up to date only for the SuperDashing curve assist. So a StartDash-time
+    // test on DashDir was reading the previous dash's leftover direction
+    // (usually zero by then) and the bounce could never fire for anybody.
+    private static bool dashBouncePending;
+    // ...and the same "wait for the direction" latch, shared by everything that
+    // needs to know which way the dash that just started is going.
+    private static bool dashDirPending;
 
     // Transition Dash
     // Set when the player enters a transition airborne with fewer dashes than their
@@ -246,6 +328,18 @@ public static class TechTracker {
     private static float chainClock;
     private static float lastBhopTime = -999f;
     private static float lastUltraTime = -999f;
+    // Walking-pace Grounded Ultra. Reported when the 1.2x actually lands: see
+    // the check in Player_Update. There is deliberately no speed band any more -
+    // speed stacks without limit, so "385 / 390" was never the signature.
+    private static float lastGuSpeedTime = -999f;
+    private const float GroundUltraSpeedCooldown = 0.6f;
+    // How long after the band announced a walking Grounded Ultra a jump still
+    // counts as the cash-in of that same move rather than a new one. The
+    // landing-to-jump gap in the walking chain is a handful of frames, so this
+    // only has to cover that handoff - deliberately much shorter than the band's
+    // own cooldown, so a genuine chained ultra half a second later still gets
+    // reported instead of being swallowed.
+    private const float GroundedUltraHandoffWindow = 0.30f;
 
     // ---- Crouch Climb --------------------------------------------------------
     // Two shapes of the same trick, so one shared "when was she last crouched"
@@ -262,8 +356,16 @@ public static class TechTracker {
     // into a wall is what the player does, and by the time the climbjump fires
     // the airborne branch of Player.Update has already stood her up
     // (IL_0D44: !onGround && jumpGraceTimer <= 0 -> Ducking = false).
+    //
+    // The window is short on purpose. NormalUpdate forces Ducking = false the
+    // moment she grabs a wall (decompiled: ClimbCheck succeeds -> set_Ducking(0)),
+    // so a real crouch-jump-to-climbjump always happens within a handful of
+    // frames of the crouch. 0.30 s was long enough to swallow unrelated techs:
+    // landing an ultra leaves her crouched (OnCollideV ducks her together with
+    // the 1.2x), so a cornerboost or reverse cornerboost performed from that
+    // crouched landing came out as "Crouch Climb" instead of itself.
     private static float lastDuckTime = -999f;
-    private const float CrouchChainWindow = 0.30f;
+    private const float CrouchChainWindow = 0.15f;
 
     public static void Load() {
         On.Celeste.Player.SuperJump            += Player_SuperJump;
@@ -361,9 +463,10 @@ public static class TechTracker {
         // was dragged forward to "now" for as long as she stayed grounded. The
         // dash -> landing gap then grew with every idle frame and every plain
         // Ultra looked delayed. Stamp the FIRST landing only.
-        if (collidingV && ducking && !ultraDucked) {
-            ultraDucked   = true;
-            ultraLandTime = chainClock;
+        if (collidingV && ducking && !landStamped) {
+            landStamped    = true;
+            ultraDucked    = true;
+            ultraLandTime  = chainClock;
             ultraCarryTime = chainClock;
             // Read here, not at grab time: this is the one instant the 1.2x is
             // certainly still in Speed (OnCollideV multiplies before it ducks).
@@ -429,13 +532,25 @@ public static class TechTracker {
         dashedOnGround    = self.onGround || self.jumpGraceTimer > 0f;
         ultraDashOnGround = dashedOnGround;
         ultraDashEndTime  = -999f;
-        lastDashDirX      = Math.Sign(self.DashDir.X);
+        // NOT lastDashDirX = Sign(self.DashDir.X) here any more. DashDir does not
+        // hold this dash's direction yet - DashBegin sets it to Vector2.Zero and
+        // the real value only arrives one frame later, from the dash coroutine's
+        // body. Reading it in StartDash meant reading the previous dash's
+        // leftovers. Every direction-dependent decision now waits for the value
+        // to actually exist; this is the latch for that.
+        dashDirPending    = true;
 
-        // A grounded down-diagonal dash is the entire setup of a grounded ultra.
-        // Stamped here as well as at the landing, because dashing onto a puffer
-        // never touches the floor and the landing hook would stay silent.
-        if (dashedOnGround && self.DashDir.Y > 0.1f && self.DashDir.X != 0f)
-            ultraCarryTime = chainClock;
+        // ---- Dash Bounce -----------------------------------------------------
+        // A wallbounce interrupted by another dash inside its first 2 frames.
+        // The TIMING is decided here - this is the frame the dash is initiated,
+        // so this is the frame the 2-frame window has to be measured on. The
+        // direction is checked a frame later, in Player_Update, once DashDir
+        // exists (see dashDirPending). The wallbounce itself was announced a
+        // frame or two earlier by Player_SuperWallJump.
+        dashBouncePending = wallbounceTime > 0f
+                            && chainClock - wallbounceTime <= DashBounceWindow;
+        // One wallbounce can only ever be consumed by one dash.
+        wallbounceTime = -999f;
 
         // A new dash invalidates a stored ultra from an earlier one - this is the
         // staleness lock, and it must NOT be based on DashDir: the game decays
@@ -659,6 +774,57 @@ public static class TechTracker {
     }
 
 
+    // Arming side of both cornerboosts.
+    //
+    // The two variants need different evidence, which is the thing the previous
+    // round got wrong:
+    //
+    //  * Forward Cornerboost. She is flying over the top edge of the wall she is
+    //    moving into, so the confirm has to be geometric - the wall is gone at
+    //    her height but still there a few pixels lower (see the confirm in
+    //    Player_Update). That is the only way to tell a real cornerboost from a
+    //    climbjump that merely happened next to a wall.
+    //
+    //  * Reverse Cornerboost. The wall is BEHIND her: she is moving away from it
+    //    (TASVideos: "If you are going right and getting close to a wall on your
+    //    left, you can press left+jump+grab"), and what makes it a cornerboost is
+    //    that this climbjump cancels her dash. Both facts are readable right
+    //    here, and the geometric test is STRUCTURALLY IMPOSSIBLE for it: at the
+    //    moment of the climbjump she is flush against the wall, so
+    //    "no wall at her height" is false by construction, and the frames she
+    //    then spends moving away from it are exactly the frames the test needs
+    //    the wall to still be there. That is why every rcb armed and none ever
+    //    fired (confirmed in the log: eight `wall=-1 facing=-1 speedX=+3xx`
+    //    arms, zero `FIRED`).
+    private static void ArmCornerboost(Player self, float speed, string how) {
+        int wallDir = (int)self.Facing;
+
+        // ---- Reverse Cornerboost: decided here, not by geometry --------------
+        // Momentum points away from the wall she is climbing AND a dash attack
+        // is live, i.e. this climbjump is the thing cancelling the dash. Both
+        // halves of the wiki's execution, no guesswork.
+        if (Math.Abs(self.Speed.X) > 20f
+            && Math.Sign(self.Speed.X) != wallDir
+            && self.DashAttacking)
+        {
+            potentialCornerBoostTimer = 0f;   // the geometric path is not this tech
+            cbWallDir = 0;
+
+            // Reverse Cornerboost has its own switch; CornerboostEnabled is the
+            // master switch for the pair, exactly as it is for the forward case.
+            if (Settings.Tech.CornerboostEnabled && Settings.Tech.ReverseCornerboostEnabled) {
+                TechPopupsModule.ShowPopup("Reverse Cornerboost", self.Position);
+            }
+            return;
+        }
+
+        potentialCornerBoostTimer = 0.08f;
+        cbRetainedSpeed = speed;
+        cbArmPos        = self.Position;
+        cbWallDir       = wallDir;
+
+    }
+
     // cornerboost arming
     private static void Player_ClimbJump(
             On.Celeste.Player.orig_ClimbJump orig, Player self) {
@@ -685,23 +851,23 @@ public static class TechTracker {
 
         if (Math.Abs(self.Speed.X) > 20f &&
             self.CollideCheck<Solid>(self.Position + Vector2.UnitX * Math.Sign(self.Speed.X) * 3f)) {
-            // Good CB
-            potentialCornerBoostTimer = 0.08f;
-            cbRetainedSpeed = self.Speed.X;
-            cbArmPos = self.Position;
+            // Good CB: the +40 is already inside the speed and the wall she is
+            // about to leave is the one in front of her.
+            ArmCornerboost(self, self.Speed.X, "good");
         } else if (retentionTimer > 0f && Math.Abs(retainedSpeed) > 20f) {
             // Bad CB: already hit the wall (Speed.X zeroed by OnCollideH) but
             // wallSpeedRetained is still live from that collision
-            potentialCornerBoostTimer = 0.08f;
-            cbRetainedSpeed = retainedSpeed;
-            cbArmPos = self.Position;
+            ArmCornerboost(self, retainedSpeed, "bad");
         } else if (retentionTimer <= 0f && Math.Abs(self.Speed.X) > 20f) {
             // NormalUpdate ClimbJump path: player is near the wall but never physically
             // hit it (e.g. buffered from a booster), so OnCollideH never set
             // wallSpeedRetained.
-            potentialCornerBoostTimer = 0.08f;
-            cbRetainedSpeed = self.Speed.X;
-            cbArmPos = self.Position;
+            //
+            // This is also where a Reverse Cornerboost lands, and that is worth
+            // knowing: an rcb is a climbjump on a wall BEHIND Madeline, so there
+            // is never a wall on the momentum side and the first test above can
+            // never match it. It was always reaching this branch.
+            ArmCornerboost(self, self.Speed.X, "near");
         }
 
         // Arm the wallboost. ClimbJump only sets wallBoostTimer when the
@@ -755,6 +921,11 @@ public static class TechTracker {
         int state = self.StateMachine.State;
 
         chainClock += Engine.DeltaTime;
+
+        // A new ground contact gets to stamp ultraLandTime again. Airborne is the
+        // reset: it covers a jump, a fall, and being carried across a room
+        // border, so a landing on the far side is measured from its own frame.
+        if (!self.onGround) landStamped = false;
 
         // Crouch Climb shape B - remember the last frame she was crouched.
         if (self.Ducking) lastDuckTime = chainClock;
@@ -933,8 +1104,33 @@ public static class TechTracker {
         var retentionTimer = (float)FI_wallSpeedRetentionTimer.GetValue(self);
         var retainedSpeed  = (float)FI_wallSpeedRetained.GetValue(self);
         if (retentionTimer > 0f && Math.Sign(self.Speed.X) == -Math.Sign(retainedSpeed)) {
-            // Moving opposite to retained direction
-            potentialCornerBoostTimer = 0f;
+            // Moving opposite to the retained direction.
+            //
+            // This used to cancel the arm outright, which silently filtered out
+            // every Reverse Cornerboost. Wiki: "A reverse cornerboost is
+            // executed by climbjumping a corner that is *behind* Madeline ...
+            // the +40 speed from jumping is applied in the opposite direction".
+            // Moving against your retained speed IS the rcb setup, so cancelling
+            // here is exactly the wrong answer. Arm it instead - with the
+            // retained speed, not the current one, because the corner is the
+            // wall she is no longer moving towards.
+            //
+            // Only re-arm when no arm is live: this runs every frame, and
+            // resetting cbArmPos each time would mean she never looks like she
+            // climbed up past it (climbedUpFromArmPos compares against it).
+            if (Settings.Tech.ReverseCornerboostEnabled
+                && Math.Abs(retainedSpeed) > 20f
+                && potentialCornerBoostTimer <= 0f) {
+                potentialCornerBoostTimer = 0.08f;
+                cbRetainedSpeed = retainedSpeed;
+                cbArmPos = self.Position;
+                // She is moving against her retained speed, so the wall that
+                // handed it to her is on the retained side - same side the
+                // confirm geometry has to be measured around.
+                cbWallDir = Math.Sign(retainedSpeed);
+            } else if (!Settings.Tech.ReverseCornerboostEnabled) {
+                potentialCornerBoostTimer = 0f;
+            }
         }
         if (potentialCornerBoostTimer > 0f) {
             potentialCornerBoostTimer -= Engine.DeltaTime;
@@ -999,10 +1195,53 @@ public static class TechTracker {
 
         orig(self);
 
+        // ---- which way does THIS dash go -------------------------------------
+        // DashDir does not exist on the frame the dash starts: DashBegin zeroes
+        // it, and the dash coroutine's body only writes the real value on the
+        // next frame it runs (`DashDir = lastAim` through CorrectDashPrecision).
+        // So every direction-dependent decision waits for the game to publish it.
+        // Non-zero is the "published" test: lastAim is never zero (GetAimVector
+        // falls back to (Facing, 0)), so a zero here means "not computed yet".
+        if (dashDirPending && self.StateMachine.State == Player.StDash
+            && self.DashDir != Vector2.Zero)
+        {
+            dashDirPending = false;
+            bool downDiagonal = self.DashDir.Y > 0.1f && self.DashDir.X != 0f;
+
+            // The value the old StartDash test was reaching for, now read at a
+            // moment when it actually holds this dash's direction.
+            lastDashDirX = Math.Sign(self.DashDir.X);
+
+            // A grounded down-diagonal dash is the entire setup of a grounded
+            // ultra. Stamped here as well as at the landing, because dashing
+            // onto a puffer never touches the floor and the landing hook would
+            // stay silent.
+            if (dashedOnGround && downDiagonal) ultraCarryTime = chainClock;
+            // ...and the same direction, stamped for ANY down-diagonal dash:
+            // this is what "an entity interrupted that dash" is measured against
+            // (see DashInterruptedByEntity - it must work for air dashes too,
+            // since the whole point is that the speed was stacked first).
+            if (downDiagonal) lastDownDiagDashTime = chainClock;
+
+            // Dash Bounce: the dash that was initiated inside the wallbounce's
+            // 2-frame window has now been shown to be the down-diagonal one.
+            if (dashBouncePending) {
+                dashBouncePending = false;
+                if (downDiagonal && Settings.Tech.DashBounceEnabled) {
+                    TechPopupsModule.ShowPopup("Dash Bounce", self.Position);
+                }
+            }
+        }
+
         // After orig, ClimbJump may have fired (buffered-jump or NormalUpdate path),
         // arming potentialCornerBoostTimer and setting cbRetainedSpeed.
         if (potentialCornerBoostTimer > 0f && Math.Abs(cbRetainedSpeed) > 0f) {
-            int dir = Math.Sign(cbRetainedSpeed);
+            // Measured around the wall she is leaving - the Facing side, captured
+            // at arm time - not around the side her momentum points at. Those two
+            // only agree for a forward cornerboost; for a Reverse Cornerboost the
+            // wall is behind her, so the old momentum-side test looked at empty
+            // air, never matched, and the rcb stayed silent.
+            int dir = cbWallDir != 0 ? cbWallDir : Math.Sign(cbRetainedSpeed);
             bool wallAtCurrentHeight = self.CollideCheck<Solid>(self.Position + Vector2.UnitX * dir);
             bool wallSlightlyBelow   = self.CollideCheck<Solid>(self.Position + Vector2.UnitX * dir + Vector2.UnitY * 4f);
             bool climbedUpFromArmPos = self.Position.Y < cbArmPos.Y - 1f;
@@ -1012,10 +1251,12 @@ public static class TechTracker {
                 potentialCornerBoostTimer = 0f;
                 if (Settings.Tech.CornerboostEnabled)
                 {
-                    // Reverse cornerboost: moving one way but facing the other.
+                    // Reverse cornerboost: momentum and wall are on opposite
+                    // sides, so the jump's +40 goes into the wall and she loses
+                    // 40 speed - but the dash is cancelled and the rest kept.
                     bool reversed = Settings.Tech.ReverseCornerboostEnabled
                         && Math.Sign(cbRetainedSpeed) != 0
-                        && Math.Sign(cbRetainedSpeed) != (int)self.Facing;
+                        && Math.Sign(cbRetainedSpeed) != dir;
                     TechPopupsModule.ShowPopup(
                         reversed ? "Reverse Cornerboost" : "Cornerboost", self.Position);
                 }
@@ -1040,7 +1281,14 @@ public static class TechTracker {
         // "how long the ultra boost was stored after the dash finished", which is
         // the only honest way to tell a Delayed Ultra from a plain one.
         bool dashingNow = self.StateMachine.State == Player.StDash;
-        if (wasDashing && !dashingNow) ultraDashEndTime = chainClock;
+        if (wasDashing && !dashingNow) {
+            ultraDashEndTime = chainClock;
+            // A dash that got cut short before DashUpdate ever ran (an instant
+            // climbjump out of the dash, for one) must not leave either latch
+            // waiting for a direction that is never coming.
+            dashDirPending    = false;
+            dashBouncePending = false;
+        }
         wasDashing = dashingNow;
 
         // Crouch Dash fallback: the dash is over and it did not turn into a
@@ -1067,6 +1315,39 @@ public static class TechTracker {
         // wallBoostTimer as part of the very conversion we are looking for.
         // The old Wallboost test watched Player.wallBoosting, which ClimbUpdate
         // sets from WallBoosterCheck() - the Core conveyor wall, not this tech.
+
+        // ---- Grounded Ultra, the walking case --------------------------------
+        // It used to be a 380-400 speed band. The player retired that idea
+        // (2026-10-14): "the key is NOT the 380-400 speed, speed stacks without
+        // limit". He is right - a band only ever catches the first ultra of a
+        // chain, and it also fires for anything else that happens to reach it.
+        //
+        // The honest signature is the one PlayerSetDucking already stamps:
+        // vanilla applies Speed.X *= 1.2 exactly there, for a down-diagonal
+        // dash, on the frame it ducks her. So "a fast down-diagonal dash just
+        // got cashed in on the floor" is the whole test - no band, no jump.
+        //
+        // ultraDashOnGround is what keeps this off a plain air ultra, and it
+        // took a round to get right: without it, every down-diagonal dash that
+        // landed above 250 popped "Grounded Ultra" on its landing frame, and the
+        // handoff below then suppressed the jump that cashes the ultra in - so a
+        // plain Ultra came out reading as a GU.
+        //
+        // The separator is the wiki's own definition of the technique: "you can
+        // perform a Wave immediately followed by a down-diagonal Dash".
+        // ultraDashOnGround IS "that dash started on the floor, or inside the
+        // coyote frames a Wave/hyper hands you" - exactly what the flat-ground
+        // chain has and an air ultra does not.
+        if (self.onGround && ultraDashOnGround && ultraLandSpeed > 250f
+            && chainClock - ultraLandTime <= GroundedUltraWindow
+            && chainClock - lastGuSpeedTime > GroundUltraSpeedCooldown)
+        {
+            lastGuSpeedTime = chainClock;
+            if (Settings.Tech.GroundedUltraEnabled)
+            {
+                TechPopupsModule.ShowPopup("Grounded Ultra", self.Position);
+            }
+        }
 
         spikeAfterPlayerUpdate = self.CollideCheck<Spikes>();
         if (spikePopupArmed)
@@ -1109,10 +1390,13 @@ public static class TechTracker {
             On.Celeste.Player.orig_Pickup orig, Player self, Holdable holdable) {
 
         // Snapshot before orig: the pickup switches to StPickup and the dash
-        // (and with it DashDir) is gone by the time orig returns.
+        // (and with it DashDir) is gone by the time orig returns - and the
+        // pickup animation zeroes Speed, so the "how fast was she" reading has
+        // to be taken now as well.
         bool    dashing = self.StateMachine.State == Player.StDash;
         bool    dashAttack = !dashing && self.dashAttackTimer > 0f;
         Vector2 dashDir = self.DashDir;
+        float   speedSq = self.Speed.LengthSquared();
 
         bool result = orig(self, holdable);
         if (!result || (!dashing && !dashAttack) || holdable == null) return result;
@@ -1146,7 +1430,14 @@ public static class TechTracker {
         // ultraLandSpeed), and the window is the dash attack plus a hair.
         // requireGround = true keeps this from stealing the Jelly / Theo Regrab
         // label for a mid-air grab that merely happens to follow an ultra.
-        bool groundedUltra = GroundedUltraArmed(self, true);
+        //
+        // The second arm is the player's own definition and needs no ground:
+        // a down-diagonal dash at high speed that this grab interrupted, which
+        // keeps the speed the same way the puffer bounce does. It is narrow on
+        // purpose - the dash has to have been down-diagonal and still live - so
+        // an ordinary Regrab (a horizontal or upward dash) keeps its own label.
+        bool groundedUltra = GroundedUltraArmed(self, true)
+            || DashInterruptedByEntity(self, dashing || dashAttack, speedSq);
 
         if (groundedUltra && Settings.Tech.GroundedUltraEnabled) {
             TechPopupsModule.ShowPopup("Grounded Ultra", self.Position);
@@ -1173,13 +1464,30 @@ public static class TechTracker {
     //
     // Player.Bounce is the single funnel for every speed-preserving bounce, so
     // this covers "a puffer, and anything else that behaves like one" without
-    // naming any of them. requireGround is false here because the step-on
-    // bounce has already lifted her off the floor - and on a puffer the floor
-    // landing never happens, so this arm leans on the dash stamp instead.
+    // naming any of them. Verified callers: Puffer.OnPlayer, Snowball
+    // .OnPlayerBounce, AngryOshiro.OnPlayerBounce, Seeker.OnBouncePlayer and
+    // FireBall.OnBounce (that last one covers both the fire and the ICE ball -
+    // it is the same entity with an iceMode flag). So the snowball / Oshiro /
+    // seeker / ice ball bounces were always reaching this hook; what they were
+    // failing was the arm test below.
+    //
+    // requireGround is false here because the step-on bounce has already lifted
+    // her off the floor - and on a puffer the floor landing never happens, so
+    // this arm leans on the dash stamp instead.
     private static void Player_Bounce(
             On.Celeste.Player.orig_Bounce orig, Player self, float fromY) {
+        // Both read BEFORE orig: Bounce writes dashAttackTimer itself, and it
+        // also hands out vertical speed, so afterwards there is no way to tell
+        // whether a dash was live (nor how fast she was) when she landed on it.
+        bool  dashLive = self.DashAttacking;
+        float speedSq  = self.Speed.LengthSquared();
         orig(self, fromY);
-        if (Settings.Tech.GroundedUltraEnabled && GroundedUltraArmed(self, false)) {
+        if (!Settings.Tech.GroundedUltraEnabled) return;
+
+        bool armed       = GroundedUltraArmed(self, false);
+        bool interrupted = DashInterruptedByEntity(self, dashLive, speedSq);
+
+        if (armed || interrupted) {
             TechPopupsModule.ShowPopup("Grounded Ultra", self.Position);
         }
     }
@@ -1429,6 +1737,7 @@ public static class TechTracker {
         else
         {
             var text = (delayed && Settings.Misc.DelayedWallbounceConversionEnabled) ? "Delayed Wallbounce" : "Wallbounce";
+            wallbounceTime = chainClock;
             if (Settings.Tech.WallbounceEnabled)
             {
                 TechPopupsModule.ShowPopup(text, self.Position);
@@ -1453,7 +1762,17 @@ public static class TechTracker {
             // usually (0,0) - checking it made every Ultra silently disappear.
             // Staleness is handled by StartDash clearing ultraDucked instead.
             if (self.Speed.LengthSquared() > 57600f) {
-                if (Settings.Tech.UltraEnabled)
+                // The walking (flat-ground) Grounded Ultra is announced by the
+                // speed band the moment the 380-400 arrives on the floor, and
+                // that arrival is the thing a player watches while chaining. A
+                // jump a few frames later is the SAME move, so it must not
+                // announce it a second time - and it must not call it a plain
+                // "Ultra" either, which is what reading ultraDashOnGround here
+                // did (the walking chain's down-diagonal dash starts in the air,
+                // so that snapshot says false even though the tech is grounded).
+                bool walkingAlreadyAnnounced = Settings.Tech.GroundedUltraEnabled
+                    && chainClock - lastGuSpeedTime <= GroundedUltraHandoffWindow;
+                if (Settings.Tech.UltraEnabled && !walkingAlreadyAnnounced)
                 {
                     // Grounded vs normal comes from the dash-start snapshot, NOT
                     // from self.onGround here: an ultra always ends with Madeline
@@ -1475,10 +1794,20 @@ public static class TechTracker {
                         && ultraLandTime > ultraDashEndTime
                         && (ultraLandTime - ultraDashEndTime) > Settings.Timing.DelayedUltraWindow;
                     lastUltraTime = chainClock;
+                    // Also stamps the walking-band clock: an ultra is a jump, so
+                    // the speed left behind by this very move must not be read as
+                    // a fresh arrival in the Grounded Ultra band a frame later.
+                    // That is what produced "plain Ultra AND Grounded Ultra" for
+                    // one move.
+                    lastGuSpeedTime = chainClock;
+                    // Delayed wins over Chained when both fit: a Du done as part of
+                    // a chain is still a Du, and the delay is the more specific
+                    // fact about it (a chained Ultra is the common case, so it must
+                    // not swallow the delayed one).
                     TechPopupsModule.ShowPopup(
                         grounded ? "Grounded Ultra"
-                            : chained  ? "Chained Ultra"
-                            : delayed  ? "Delayed Ultra" : "Ultra",
+                            : delayed  ? "Delayed Ultra"
+                            : chained  ? "Chained Ultra" : "Ultra",
                         self.Position);
                 }
             }

@@ -14,17 +14,22 @@
   body{margin:0;background:var(--bg);color:var(--txt);
        font:14px/1.5 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
   header{position:sticky;top:0;z-index:5;background:var(--panel);
-         border-bottom:1px solid var(--line);padding:10px 20px 0}
+         border-bottom:1px solid var(--line);padding:12px 20px}
   h1{margin:0 0 2px;font-size:16px;font-weight:600}
   h1 span{color:var(--accent)}
   .sub{color:var(--dim);font-size:12px}
-  .tabs{display:flex;gap:2px;margin-top:8px}
-  .tab{background:transparent;border:1px solid transparent;border-bottom:none;
-       border-radius:8px 8px 0 0;padding:6px 16px;font-size:13px;color:var(--dim);
-       cursor:pointer;position:relative;top:1px}
-  .tab:hover{color:var(--txt)}
-  .tab.on{background:var(--bg);border-color:var(--line);color:var(--accent);
-          border-bottom-color:var(--bg)}
+  /* 「技巧 / 外观」切换栏：放页头右上角，做成实心分段控件。
+     原来它是一排贴在标题下面的小字，跟背景几乎融成一片 ——
+     实测就是「找不到它在哪」，得盯着看几秒才认出来。 */
+  .headrow{display:flex;align-items:center;justify-content:space-between;
+           gap:18px;flex-wrap:wrap}
+  .tabs{display:flex;gap:4px;padding:3px;background:var(--bg);flex:none;
+        border:1px solid var(--line);border-radius:10px}
+  .tab{background:transparent;border:1px solid transparent;border-radius:7px;
+       padding:7px 24px;font-size:13.5px;font-weight:600;color:var(--dim);
+       cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+  .tab:hover{color:var(--txt);background:var(--card)}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#0d1216}
   .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
   button{background:var(--card);color:var(--txt);border:1px solid var(--line);
          border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
@@ -53,10 +58,11 @@
          letter-spacing:.06em;white-space:nowrap;
          display:flex;align-items:baseline;gap:8px}
   .sechd .cnt{color:var(--dim);font-size:11px;font-weight:600;letter-spacing:0}
-  /* 卡片高度定死，有没有别名都一样高；左侧色条按技巧原分类上色 */
+  /* 卡片高度定死，有没有别名都一样高；左侧色条按技巧原分类上色。
+     宽度必须和 JS 里的 BOX_W 一致（版面是按注册表坐标手摆的）。 */
   .card{position:absolute;width:236px;height:56px;box-sizing:border-box;
-        display:flex;flex-direction:column;justify-content:center;
-        padding:0 11px;
+        display:flex;align-items:center;gap:9px;
+        padding:0 10px;
         background:var(--card);border:1px solid var(--line);
         border-left:3px solid var(--cat,#3d444f);border-radius:8px;
         cursor:pointer;user-select:none;
@@ -66,6 +72,13 @@
   /* 搜索时：命中的亮、其余暗，版面不动 */
   .card.dim{opacity:.14}
   .card.hit{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  /* 图标：跟游戏内弹窗同一张 PNG，由 mod 的本地服务 /icon?name= 提供 */
+  .card .ic{flex:none;width:34px;height:34px;border-radius:7px;overflow:hidden;
+            display:flex;align-items:center;justify-content:center;
+            background:#0f1218}
+  .card .ic img{width:34px;height:34px;display:block}
+  .card .ic .nb{font-size:15px;font-weight:700;color:var(--dim)}
+  .card .body{flex:1;min-width:0}
   .card .top{display:flex;align-items:baseline;gap:6px}
   .card .n{font-size:13px;font-weight:600;flex:1;min-width:0;
            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -77,7 +90,7 @@
   .card.on .al{color:#9fb0c4}
 
   /* ==== 外观页：左设置 · 右预览，一屏放下 ==== */
-  #tab-look{height:calc(100vh - 88px);overflow:hidden;padding-bottom:44px}
+  #tab-look{height:calc(100vh - 74px);overflow:hidden;padding-bottom:44px}
   .lookgrid{display:grid;grid-template-columns:minmax(520px,1fr) 640px;
             gap:18px;align-items:start;height:100%}
   .settings{columns:2;column-gap:14px}
@@ -166,11 +179,15 @@
 </head>
 <body>
 <header>
-  <h1>TechPopups · <span>技巧面板</span></h1>
-  <div class="sub">改动会直接写回 Mod 设置 · 只在游戏内按屏幕刷新时生效</div>
-  <div class="tabs">
-    <button class="tab on" data-tab="tech">技巧</button>
-    <button class="tab" data-tab="look">外观</button>
+  <div class="headrow">
+    <div class="headtxt">
+      <h1>TechPopups · <span>技巧面板</span></h1>
+      <div class="sub">改动会直接写回 Mod 设置 · 只在游戏内按屏幕刷新时生效</div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-tab="tech">技巧</button>
+      <button class="tab" data-tab="look">外观</button>
+    </div>
   </div>
 </header>
 
@@ -794,12 +811,16 @@ function render(){
           + `${esc(s.name)}<span class="cnt">${s.items.length} 项</span></div>`;
     for(const t of s.items){
       const cls = "card" + (t.on ? " on" : "") + (q ? (hit(t) ? " hit" : " dim") : "");
-      // 卡片正面是正名，别名缩在下面 —— 颜色条取技巧自己的原分类
+      // 卡片正面是正名，别名缩在下面；左边一张图标（跟游戏内弹窗同一张 PNG），
+      // 颜色条取技巧自己的原分类
       html += `<div class="${cls}" data-id="${t.id}"`
-            + ` style="left:${t.x}px;top:${t.y}px;--cat:${catColor(t.cat)}">`
+            + ` style="left:${t.x}px;top:${t.y}px;--cat:${catColor(t.cat)}"`
+            + ` title="${esc(t.name)}${t.alias ? " · " + esc(t.alias) : ""}">`
+            + `<div class="ic">${iconTag(t)}</div>`
+            + `<div class="body">`
             + `<div class="top"><span class="n">${esc(t.name)}</span>`
             + `<span class="tag">${t.on ? "已启用" : "已停用"}</span></div>`
-            + `<div class="al">${esc(t.alias || "")}</div></div>`;
+            + `<div class="al">${esc(t.alias || "")}</div></div></div>`;
     }
   }
 
@@ -809,8 +830,25 @@ function render(){
   main.querySelectorAll(".card").forEach(el => {
     el.addEventListener("click", () => toggle(el));
   });
+  // 图标拿不到就退成字母牌 —— 服务端找不到那张 PNG 时回 404，图片会触发 error
+  main.querySelectorAll(".card .ic img").forEach(img => {
+    img.addEventListener("error", () => {
+      const nb = document.createElement("span");
+      nb.className = "nb";
+      nb.textContent = img.dataset.letter || "?";
+      img.replaceWith(nb);
+    });
+  });
   boardSig = techSig(data.techs);
   fit();
+}
+
+// 卡片图标：走 mod 自己的本地服务，名字原样传过去（服务端会用和游戏内
+// 查找同一套规则去解析，包括「Dream Super / Hyper」这种带斜杠的名字）
+function iconTag(t){
+  const letter = esc((t.name[0] || "?").toUpperCase());
+  return `<img src="/icon?name=${encodeURIComponent(t.name)}"`
+       + ` alt="" data-letter="${letter}" draggable="false">`;
 }
 
 // 只更新卡片的开关外观（不重建 DOM）—— 重建会让正在进行的点击失效

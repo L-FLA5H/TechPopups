@@ -21,6 +21,7 @@ modoptions_techpopups_coretech_enabled=岩浆块Super / Hyper（Core Super / Hyp
 
 modoptions_techpopups_dreamtech_enabled=果冻Super / Hyper（Dream Super / Hyper）
 
+modoptions_techpopups_dashbounce_enabled=Dash Bounce
 modoptions_techpopups_transitiondash_enabled=Transition Dash
 
 modoptions_techpopups_reformtech_enabled=方块刷新技巧（Reform Tech）
@@ -73,9 +74,9 @@ modoptions_techpopups_popup_displaymode=显示内容
 modoptions_techpopups_popup_labeloffset=头顶高度
 modoptions_techpopups_popup_perchar=逐字动画
 modoptions_techpopups_popup_edgemargin=贴边留白
-modoptions_techpopups_popup_glass=玻璃底板
+modoptions_techpopups_popup_glass=启用不透明背景
 modoptions_techpopups_popup_glasstrans=背景透明度
-modoptions_techpopups_popup_glassblur=把框底后面的画面糊掉
+modoptions_techpopups_popup_glassblur=把框底后面的画面糊掉（毛玻璃）
 modoptions_techpopups_popup_glassblurstrength=模糊强度
 
 modoptions_techpopups_spiketech_enabled=Spike Tech
@@ -86,7 +87,7 @@ modoptions_techpopups_chain_window=连招窗口 (厘秒)
 modoptions_techpopups_delayedultra_enabled=Delayed Ultra
 modoptions_techpopups_delayedultra_window=Delayed Ultra 阈值
 
-modoptions_techpopups_submenu_panelsettings=技巧面板
+modoptions_techpopups_submenu_panelsettings=技巧面板（推荐用它来设置）
 modoptions_techpopups_panel_enabled=启用技巧面板
 modoptions_techpopups_panel_port=面板端口
 modoptions_techpopups_demodash_naming=叫它 Demodash
@@ -117,3 +118,10 @@ modoptions_techpopups_submenu_techsettings=技巧开关
 modoptions_techpopups_submenu_timingsettings=判定时机
 
 modoptions_techpopups_submenu_miscsettings=杂项设置
+
+modoptions_techpopups_popup_glasstrans_sub=只影响底板的通透程度，糊不糊看下面那项
+modoptions_techpopups_popup_glassblur_sub=开了会占用更多性能，实验性功能，慎用
+modoptions_techpopups_chain_window_sub=间隔小于这个时间就算「链式」
+modoptions_techpopups_delayedultra_window_sub=老是判成普通 Ultra 就往下调
+modoptions_techpopups_panel_port_sub=浏览器打开 http://localhost:端口/ ；改端口要重启游戏
+modoptions_techpopups_panel_open_sub=在浏览器里可视化地设置，比在这里翻快得多

@@ -38,6 +38,20 @@ public static class TechIconLoader {
         return null;
     }
 
+    // The same search order, but as file names - the out-of-game panel serves
+    // the PNGs straight off disk (TechPanelServer's /icon route) and it MUST
+    // agree with what the in-game popup resolves, otherwise a card shows art the
+    // popup does not have. Both go through CandidateKeys, so they cannot drift.
+    public static IEnumerable<string> CandidateFiles(string techName)
+    {
+        if (string.IsNullOrEmpty(techName)) yield break;
+        foreach (string key in CandidateKeys(techName))
+        {
+            int slash = key.LastIndexOf('/');
+            yield return key.Substring(slash + 1) + ".png";
+        }
+    }
+
     private static IEnumerable<string> CandidateKeys(string techName)
     {
         var seen = new HashSet<string>();

@@ -21,6 +21,7 @@ modoptions_techpopups_coretech_enabled=Core Super / Hyper
 
 modoptions_techpopups_dreamtech_enabled=Dream Super / Hyper
 
+modoptions_techpopups_dashbounce_enabled=Dash Bounce
 modoptions_techpopups_transitiondash_enabled=Transition Dash
 
 modoptions_techpopups_reformtech_enabled=Reform Tech
@@ -73,9 +74,9 @@ modoptions_techpopups_popup_displaymode=Display Mode
 modoptions_techpopups_popup_labeloffset=Label height
 modoptions_techpopups_popup_perchar=Per-letter animation
 modoptions_techpopups_popup_edgemargin=Edge margin
-modoptions_techpopups_popup_glass=Glass panel
+modoptions_techpopups_popup_glass=Opaque background
 modoptions_techpopups_popup_glasstrans=Backdrop transparency
-modoptions_techpopups_popup_glassblur=Blur what is behind the label
+modoptions_techpopups_popup_glassblur=Blur what is behind the label (frosted glass)
 modoptions_techpopups_popup_glassblurstrength=Blur strength
 
 modoptions_techpopups_spiketech_enabled=Spike Tech
@@ -86,7 +87,7 @@ modoptions_techpopups_chain_window=Chain Window (cs)
 modoptions_techpopups_delayedultra_enabled=Delayed Ultra
 modoptions_techpopups_delayedultra_window=Delayed Ultra delay
 
-modoptions_techpopups_submenu_panelsettings=Tech Picker
+modoptions_techpopups_submenu_panelsettings=Tech Picker (recommended)
 modoptions_techpopups_panel_enabled=Enable Tech Picker
 modoptions_techpopups_panel_port=Tech Picker Port
 modoptions_techpopups_demodash_naming=Call it Demodash
@@ -117,3 +118,10 @@ modoptions_techpopups_submenu_techsettings=Techniques
 modoptions_techpopups_submenu_timingsettings=Timing
 
 modoptions_techpopups_submenu_miscsettings=Misc
+
+modoptions_techpopups_popup_glasstrans_sub=Only how see-through the plate is; blurring is the switch below
+modoptions_techpopups_popup_glassblur_sub=Costs more performance. Experimental - use with care
+modoptions_techpopups_chain_window_sub=Closer together than this counts as chained
+modoptions_techpopups_delayedultra_window_sub=Lower this if Delayed Ultras keep coming out as plain ones
+modoptions_techpopups_panel_port_sub=Open http://localhost:<port>/ in a browser. Changing it needs a restart
+modoptions_techpopups_panel_open_sub=Set things up visually in a browser instead of paging through here

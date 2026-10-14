@@ -155,6 +155,8 @@ public static class TechRegistry
             () => s.Tech.UltraEnabled, v => s.Tech.UltraEnabled = v));
         list.Add(E("groundedultra", "Grounded Ultra", "平地Ultra", TechCategory.Dash, SecDash, 1090, 150, "GroundedUltraEnabled",
             () => s.Tech.GroundedUltraEnabled, v => s.Tech.GroundedUltraEnabled = v));
+        list.Add(E("dashbounce", "Dash Bounce", "", TechCategory.Dash, SecDash, 1090, 250, "DashBounceEnabled",
+            () => s.Tech.DashBounceEnabled, v => s.Tech.DashBounceEnabled = v));
         list.Add(E("wallbounce", "Wallbounce", "蹭墙", TechCategory.Dash, SecDash, 1090, 340, "WallbounceEnabled",
             () => s.Tech.WallbounceEnabled, v => s.Tech.WallbounceEnabled = v));
         list.Add(E("chainedultra", "Chained Ultra", "连续Ultra", TechCategory.Dash, SecDash, 1400, 50, "ChainedUltraEnabled",

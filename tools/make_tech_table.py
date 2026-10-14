@@ -45,7 +45,7 @@ TRIG = {
     "Neutral Jump": "贴墙跳的时候方向键完全不按（MoveX == 0）",
     "Overclock": "地面爬墙跳时，按的方向和游戏给的 wallBoost 方向一致",
     "Cornerboost": "爬墙跳之后越过墙角、速度被游戏保留下来",
-    "Reverse Cornerboost": "同上，但保留下来的速度方向和你当时的朝向相反",
+    "Reverse Cornerboost": "反着做：墙在身后（和前进方向相反），朝墙爬墙跳。爬墙跳的 +40 加向墙那边所以掉 40 速度，但冲刺被打断、剩下的速度保住。常用来取消斜上冲刺",
     "Wallboost": "游戏自己的 wallBoosting 标志上升沿 —— 爬墙跳被折算成踢墙跳、体力返还",
     "Crouch Climb": "按住下键抓住墙",
     "Retention Tech": "墙跳的时候，游戏还在保留你碰墙之前的速度",
@@ -77,8 +77,8 @@ TRIG = {
     # 面板里「冲刺类」和「冷门 / 待补」两项都叫 Grounded Ultra（默认分别是关 / 开）。
     # TRIG 按显示名查，所以两项共用这一句 —— 写全，别再写成「还没写判定」。
     "Grounded Ultra": "两项共用一个显示名。<b>冲刺类</b>那条（默认关）：冲刺起手那一瞬间人在（或刚离开）地面，只看冲刺开始那一刻。<b>冷门类</b>那条（默认开）：斜下冲刺落地吃到 uber 后 0.35 秒内抓住水母 / Theo 或踩到河豚顶；或在地面上按出斜下冲刺后的 0.6 秒内做同样的事",
-    "Delayed Ultra": "从冲刺结束到落地之间隔得比阈值久（默认 35 厘秒）。默认关",
-    "Dash Bounce": "还没写判定：要靠像素级位置或体力反推，误报率会很高",
+    "Delayed Ultra": "从冲刺结束到落地之间隔得比阈值久（默认 15 厘秒，设置里可调）。默认关",
+    "Dash Bounce": "蹭墙跳（Wallbounce）起跳后 4 帧内接一次斜下冲刺打断它。酱五训练场把这招叫「蹭墙跳打断（Wallbounce cancel）」，斜下冲刺这一种就是 Dash Bounce",
     "Ceiling Pop": "还没写判定：游戏里的相关字段是编译期常量，一处引用都没有",
     "Bino Clip": "还没写判定：要靠像素级位置反推",
     "Water Boost": "从水面起跳 —— 用的就是游戏自己 SwimJumpCheck 的那一行",
@@ -130,8 +130,11 @@ def main():
     files = sorted(f for f in os.listdir(ICONS) if f.lower().endswith(".png"))
 
     reg = open(os.path.join(SRC, "Source", "TechRegistry.cs"), encoding="utf-8").read()
+    # E(id, name, alias, category, section, x, y, key, get, set) - the old
+    # "有没有判定" bool is gone from the registry, so it is derived from TRIG
+    # below instead (a "还没写判定" trigger text means unimplemented).
     rows = re.findall(
-        r'E\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*TechCategory\.(\w+)\s*,\s*(true|false)',
+        r'E\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"[^"]*"\s*,\s*TechCategory\.(\w+)\s*,',
         reg)
     assert rows, "TechRegistry 一条都没解析到，锚点不匹配"
 
@@ -140,11 +143,13 @@ def main():
     CAT_ORDER = ["Dash", "Dashless", "Entity", "Obscure"]
 
     cards = {}
-    for tid, name, cat, impl in rows:
-        impl = (impl == "true")
+    for tid, name, cat in rows:
         sample = SAMPLE.get(name, name)
         fname, depth = resolve(sample, files)
         trig = TRIG.get(name, "（说明待补）")
+        # 注册表里已经没有「有没有判定」这一列，改从说明文本反推：
+        # 触发方式写着「还没写判定」的就是还没实现的那几条。
+        impl = "还没写判定" not in trig
 
         b64 = None
         if fname:
