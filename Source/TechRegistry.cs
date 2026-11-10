@@ -165,6 +165,8 @@ public static class TechRegistry
             () => s.Tech.DelayedUltraEnabled, v => s.Tech.DelayedUltraEnabled = v));
         list.Add(E("delayedwallbounce", "Delayed Wallbounce", "延迟蹭墙", TechCategory.Dash, SecDash, 1400, 340, "WallbounceEnabled",
             () => s.Tech.WallbounceEnabled, v => s.Tech.WallbounceEnabled = v));
+        list.Add(E("moonboost", "Moon Boost", "月亮块加速", TechCategory.Dash, SecDash, 1400, 250, "MoonBoostEnabled",
+            () => s.Tech.MoonBoostEnabled, v => s.Tech.MoonBoostEnabled = v));
 
         // ================= 无冲技巧 =================
         list.Add(E("bunnyhop", "Bunnyhop", "兔子跳", TechCategory.Dashless, SecDashless, 100, 540, "BunnyhopEnabled",

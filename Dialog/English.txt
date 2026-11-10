@@ -9,6 +9,7 @@ modoptions_techpopups_bhop_landjump=Bhop Land Window (cs)
 modoptions_techpopups_backboost_maxtime=Backboost Window (cs)
 
 modoptions_techpopups_hyper_enabled=Hyperdash
+modoptions_techpopups_moonboost_enabled=Moon Boost
 
 modoptions_techpopups_super_enabled=Superdash
 

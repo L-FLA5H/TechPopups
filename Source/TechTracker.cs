@@ -117,19 +117,21 @@ public static class TechTracker {
     //    interrupted by a bounce or a throwable, so the speed was kept."
     //
     // So the signature is three facts, none of them a magic number:
-    //   * a down-diagonal dash happened            -> lastDownDiagDashTime
-    //   * it was still live when the entity hit    -> self.DashAttacking
-    //   * the speed is above the ultra bar (240)   -> Speed.LengthSquared
+    //   * THIS dash was down-diagonal          -> dashWasDownDiagonal
+    //   * it was still live when the entity hit -> self.DashAttacking
+    //   * the speed is above the ultra bar (240) -> Speed.LengthSquared
     // A bouncing-off-a-snowball check that reads 380-400 would only ever catch
     // the first ultra of a chain; this catches the tenth one too.
-    private static float lastDownDiagDashTime = -999f;
-    // The dash attack itself only lives ~0.3 s, so this is slack on top of it,
-    // not the real gate - it just keeps a stale stamp from ever matching.
-    private const float GroundedUltraInterruptWindow = 0.5f;
+    //
+    // The direction has to be a flag describing the CURRENT dash, not a stamp
+    // meaning "a down-diagonal dash happened recently". Chaining ultras leaves
+    // a down-diagonal dash inside the last half second almost always, so the
+    // stamped version also reported GU for an UP-diagonal dash into a grab.
+    private static bool dashWasDownDiagonal;
 
     private static bool DashInterruptedByEntity(Player self, bool dashWasLive, float speedSq) {
         return dashWasLive
-            && chainClock - lastDownDiagDashTime <= GroundedUltraInterruptWindow
+            && dashWasDownDiagonal
             && speedSq > 57600f;          // 240, the game's own ultra bar
     }
 
@@ -539,6 +541,8 @@ public static class TechTracker {
         // leftovers. Every direction-dependent decision now waits for the value
         // to actually exist; this is the latch for that.
         dashDirPending    = true;
+        // Unknown again until this dash publishes its direction.
+        dashWasDownDiagonal = false;
 
         // ---- Dash Bounce -----------------------------------------------------
         // A wallbounce interrupted by another dash inside its first 2 frames.
@@ -1217,11 +1221,11 @@ public static class TechTracker {
             // onto a puffer never touches the floor and the landing hook would
             // stay silent.
             if (dashedOnGround && downDiagonal) ultraCarryTime = chainClock;
-            // ...and the same direction, stamped for ANY down-diagonal dash:
-            // this is what "an entity interrupted that dash" is measured against
+            // ...and the direction THIS dash has, remembered until the next one
+            // starts: "an entity interrupted that dash" is measured against it
             // (see DashInterruptedByEntity - it must work for air dashes too,
             // since the whole point is that the speed was stacked first).
-            if (downDiagonal) lastDownDiagDashTime = chainClock;
+            dashWasDownDiagonal = downDiagonal;
 
             // Dash Bounce: the dash that was initiated inside the wallbounce's
             // 2-frame window has now been shown to be the down-diagonal one.
@@ -1639,6 +1643,13 @@ public static class TechTracker {
     // demoDash -> Demohyper
     // Reverse: if the dash had a horizontal component opposite to current Facing -> prefix "Reverse ".
     // Core / Dream variants layered on top.
+    //
+    // The push-off speeds SuperJump produces on its own (decompiled):
+    // Speed.X = 260 * Facing, then *1.25 while ducking (hyper / wavedash /
+    // demohyper) -> 325. Anything past those bars came from somewhere else,
+    // which is exactly what the moon-boost test looks at.
+    private const float SuperPushOffSpeed = 260f;
+    private const float HyperPushOffSpeed = 325f;
     private static void Player_SuperJump(
             On.Celeste.Player.orig_SuperJump orig, Player self) {
         ultraDucked = false;
@@ -1674,8 +1685,26 @@ public static class TechTracker {
         bool hasDream   = dreamGrace;
         bool hasCore    = coreGrace;
 
+        // orig() runs here, before the popups, because the moon-boost test needs
+        // the speed SuperJump just produced - and that does not exist until it
+        // has run. Every fact the popups decide on is already snapshotted above.
+        orig(self);
+
         if (!hasDream && !hasCore) {
-            if (isDownward)
+            // ---- Moon Boost ---------------------------------------------------
+            // A super/hyper whose push-off came out faster than the move can
+            // produce by itself. SuperJump sets the horizontal speed outright,
+            // so the only way past 260 (super) or 325 (hyper / wavedash /
+            // demohyper) is the LiftBoost it adds right afterwards - which is
+            // what a moon block hands over when you dash into its side.
+            // Reported INSTEAD of the plain name: it is the same jump, and the
+            // interesting fact is where the extra speed came from.
+            float pushOff = isDownward ? HyperPushOffSpeed : SuperPushOffSpeed;
+            if (Settings.Tech.MoonBoostEnabled && Math.Abs(self.Speed.X) > pushOff + 1f)
+            {
+                TechPopupsModule.ShowPopup("Moon Boost", self.Position);
+            }
+            else if (isDownward)
             {
                 if (Settings.Tech.HyperEnabled)
                 {
@@ -1712,9 +1741,6 @@ public static class TechTracker {
             }
             dreamGrace = false;
         }
-
-
-        orig(self);
 
         // Arm bunnyhop hold tracking for the jump that SuperJump just performed (since Jump() doesn't run in this case)
         bhopTrackingHold = true;
@@ -1961,18 +1987,33 @@ public static class TechTracker {
 
         bool neutralJump = Input.MoveX.Value == 0;
 
-        // Retention Tech: wall-jumping while the game is still holding on to
-        // the speed you had before touching the wall.
-        var retentionTimer = (float)FI_wallSpeedRetentionTimer.GetValue(self);
-        if (retentionTimer > 0f && Input.MoveX.Value != 0)
-        {
-            if (Settings.Tech.RetentionTechEnabled)
-            {
-                TechPopupsModule.ShowPopup("Retention Tech", self.Position);
-            }
-        }
+        // Retention Tech: a wall jump that KEPT the horizontal speed of the dash
+        // that ran into the wall, instead of the usual small push-off.
+        //
+        // `wallSpeedRetentionTimer > 0` on its own is not the tech. Decompiled:
+        // OnCollideH stores Speed.X into wallSpeedRetained whenever that timer is
+        // currently zero - no speed threshold, no state check - so simply walking
+        // into a wall arms it for WallSpeedRetentionTime, and the next wall jump
+        // then looks exactly like a real retention. Two more facts separate them:
+        //   * the speed being remembered is dash-class. Walking is ~90, the wall
+        //     jump's own push-off is 130, a dash is 240 - 180 sits clean between.
+        //   * the jump actually kept it: WallJump overwrites Speed.X with the
+        //     retained value, so the speed right after the jump still has to be
+        //     that value (a stale-but-unused timer would leave 130).
+        const float RetentionTechMinSpeed = 180f;
+        float retentionTimer = (float)FI_wallSpeedRetentionTimer.GetValue(self);
+        float retainedSpeed  = (float)FI_wallSpeedRetained.GetValue(self);
+        bool  retentionArmed = retentionTimer > 0f
+                               && Math.Abs(retainedSpeed) > RetentionTechMinSpeed;
 
         orig(self, dir);
+
+        if (retentionArmed
+            && Math.Abs(self.Speed.X) >= Math.Abs(retainedSpeed) - 1f
+            && Settings.Tech.RetentionTechEnabled)
+        {
+            TechPopupsModule.ShowPopup("Retention Tech", self.Position);
+        }
 
         if (neutralJump && neutralJumpPopupCooldown <= 0f)
         {

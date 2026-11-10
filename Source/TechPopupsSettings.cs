@@ -35,6 +35,9 @@ public class TechPopupsSettings : EverestModuleSettings
         [SettingName("modoptions_techpopups_hyper_enabled")]
         public bool HyperEnabled { get; set; } = true;
 
+        [SettingName("modoptions_techpopups_moonboost_enabled")]
+        public bool MoonBoostEnabled { get; set; } = true;
+
         [SettingName("modoptions_techpopups_bunnyhop_enabled")]
         public bool BunnyhopEnabled { get; set; } = true;
 
