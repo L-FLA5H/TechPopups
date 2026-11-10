@@ -544,6 +544,12 @@ public static class TechTracker {
         // Unknown again until this dash publishes its direction.
         dashWasDownDiagonal = false;
 
+        // Snapshot what she is standing on before the dash changes anything:
+        // a moon block has nothing to give until THIS dash kicks it, so a
+        // non-zero value here means the lift behind the coming jump was a
+        // moving platform's, not the block's recoil. See the field comment.
+        liftSpeedAtDashStartX = self.LiftSpeed.X;
+
         // ---- Dash Bounce -----------------------------------------------------
         // A wallbounce interrupted by another dash inside its first 2 frames.
         // The TIMING is decided here - this is the frame the dash is initiated,
@@ -1650,6 +1656,19 @@ public static class TechTracker {
     // which is exactly what the moon-boost test looks at.
     private const float SuperPushOffSpeed = 260f;
     private const float HyperPushOffSpeed = 325f;
+
+    // Where the platform under her feet was going when the dash began.
+    //
+    // This is what separates a moon boost from a plain boosted super, and it is
+    // not a speed threshold: a moon block is STATIONARY until the dash hits its
+    // side - the recoil it takes away from her is exactly what hands over the
+    // lift. A moving block ("机关") is already sliding on its own schedule, so a
+    // super off one comes out fast for the same mechanical reason (Player.Jump
+    // is literally `Speed += LiftBoost`) without being a moon boost at all.
+    //
+    // Zero here means "nothing under her was already moving sideways", which is
+    // the state every real moon boost starts from.
+    private static float liftSpeedAtDashStartX;
     private static void Player_SuperJump(
             On.Celeste.Player.orig_SuperJump orig, Player self) {
         ultraDucked = false;
@@ -1697,10 +1716,20 @@ public static class TechTracker {
             // so the only way past 260 (super) or 325 (hyper / wavedash /
             // demohyper) is the LiftBoost it adds right afterwards - which is
             // what a moon block hands over when you dash into its side.
+            //
+            // "Past the bar" alone is not enough, because every moving block
+            // hands over lift the same way: riding one that already slides and
+            // jumping off it clears the bar without any moon block involved.
+            // The dash-start snapshot is the difference - a moon block is still
+            // until this dash kicks it, so there was nothing under her to ride.
+            //
             // Reported INSTEAD of the plain name: it is the same jump, and the
             // interesting fact is where the extra speed came from.
             float pushOff = isDownward ? HyperPushOffSpeed : SuperPushOffSpeed;
-            if (Settings.Tech.MoonBoostEnabled && Math.Abs(self.Speed.X) > pushOff + 1f)
+            bool rodeMover  = Math.Abs(liftSpeedAtDashStartX) > 0.5f;
+            if (Settings.Tech.MoonBoostEnabled
+                && Math.Abs(self.Speed.X) > pushOff + 1f
+                && !rodeMover)
             {
                 TechPopupsModule.ShowPopup("Moon Boost", self.Position);
             }

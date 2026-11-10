@@ -1,5 +1,5 @@
 - Name: TechPopups
-  Version: 1.3.3
+  Version: 1.3.4
   DLL: bin/TechPopups.dll
   Dependencies:
     - Name: EverestCore
