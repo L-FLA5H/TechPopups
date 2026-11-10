@@ -611,6 +611,21 @@ def dash_bounce():
     m_arrow(a, 21.4, 15.0, 25.2, 23.0, 2.8, 6.0, 4.4)     # 拱的这一头收在右下
     return [flow(a)]
 
+def moon_boost():
+    """Moon Boost（月亮块加速）：从月亮块侧面弹出去，速度超过 super / hyper 自己能给的上限。
+
+    左边一个**月牙**（粗弧，开口朝右）当月亮块，右边一支横箭头冲出去。
+    和 Retention Tech 那张「穿过墙的横箭头」刻意分开：这里箭头是从月牙**出发**的，
+    不是穿过什么东西；月牙在 30 像素下也比一个方块更好认。
+    """
+    m = new_mask()
+    m_arc(m, 13.0, 15.0, 6.6, 3.2, 55.0, 305.0)          # 月牙，开口朝右
+
+    a = new_mask()
+    m_arrow(a, 12.4, 15.0, 28.4, 15.0, 2.9, 6.2, 4.6)    # 速度从月牙右边冲出去
+    return [gold(m), flow(a)]
+
+
 def reverse_cornerboost():
     """Reverse Cornerboost（rcb）：斜上通过一个墙角。
 
@@ -730,6 +745,7 @@ TODO = [
     ("Grounded Ultra", PLATE_ENTITY, grounded_ultra_cancel),
     ("Double Block Boost", PLATE_ENTITY, double_block_boost),
     ("Dash Bounce", PLATE_DASH, dash_bounce),
+    ("Moon Boost", PLATE_DASH, moon_boost),
     # 原来这张靠「去掉 reverse 前缀」复用 Cornerboost 的图，看不出是反向的，
     # 现在给它一张自己的（左边那个缺口圆角镜像过来）。
     ("Reverse Cornerboost", PLATE_DASHLESS, reverse_cornerboost),
