@@ -52,6 +52,11 @@ public class TechPopupEntity : Entity
 
     private readonly MTexture _icon;
 
+    // Built once: the name never changes, and rebuilding it per frame meant
+    // three string allocations per label per frame for a lookup that is almost
+    // always a miss.
+    private readonly string _iconOnlyKey;
+
     public TechPopupEntity(Vector2 worldPosition, string techName, float delay, float speed = 0f) : base(worldPosition)
     {
         TechName = techName;
@@ -62,6 +67,7 @@ public class TechPopupEntity : Entity
             BaseAnimInTime * MathF.Pow((BaselineSpeed / Math.Max(speed, BaselineSpeed)), SpeedScale),
             0.01f);
         _icon = TechIconLoader.TryGet(techName);
+        _iconOnlyKey = "techpopups/" + techName.ToLowerInvariant().Replace(" ", "_");
     }
 
     public override void Update()
@@ -196,7 +202,7 @@ public class TechPopupEntity : Entity
     public Rectangle GetScreenBounds(Vector2 anchor)
     {
         float scale = Settings.Popup.Scale;
-        var atlasKey = "techpopups/" + TechName.ToLowerInvariant().Replace(" ", "_");
+        var atlasKey = _iconOnlyKey;
         if (GFX.Gui.Has(atlasKey))
         {
             var tex = GFX.Gui[atlasKey];
@@ -315,7 +321,7 @@ public class TechPopupEntity : Entity
         }
         drawPos += edgeOffset;
 
-        var atlasKey = "techpopups/" + TechName.ToLowerInvariant().Replace(" ", "_");
+        var atlasKey = _iconOnlyKey;
         if (GFX.Gui.Has(atlasKey))
         {
             DrawIconOnly(drawPos, atlasKey, scale);
@@ -566,6 +572,58 @@ public class TechPopupEntity : Entity
         if (w <= 0f || h <= 0f || c.A <= 1) return;
         if (gOut <= 0f) gOut = 0f;
 
+        // Same reasoning as DrawCapsule: a normal pill is wider than it is tall,
+        // and then a ring is at most TWO spans per row (the left wall and the
+        // right wall) instead of a draw call per pixel of width. Taller-than-wide
+        // falls back to the column walk, exactly like the body does.
+        if (w < h) { DrawRingBandCols(x, y, w, h, ox, oy, gOut, gIn, c); return; }
+
+        float ox0 = x + ox - gOut, oy0 = y + oy - gOut;
+        float ow  = w + gOut * 2f, oh  = h + gOut * 2f;
+        float ix0 = x + ox - gIn,  iy0 = y + oy - gIn;
+        float iw  = w + gIn * 2f,  ih  = h + gIn * 2f;
+
+        int py0 = (int)MathF.Floor(oy0) - 1;
+        int py1 = (int)MathF.Ceiling(oy0 + oh) + 1;
+
+        // Which shape to punch out of the band.
+        //
+        // gIn == gOut means the caller passed no inner shape at all (the solid
+        // shadow crescent), so the thing to cut away is the BODY - the inner
+        // shape here would be the outer one itself and would erase everything.
+        // Otherwise the inner capsule is the body's own silhouette (gIn = 0)
+        // or a slightly grown copy of it, and cutting that leaves the band.
+        bool cutBody = gIn >= gOut;
+
+        for (int py = py0; py <= py1; py++)
+        {
+            float rowc = py + 0.5f;
+            RowSpan(ox0, oy0, ow, oh, rowc, out float l, out float r);
+            if (r <= l) continue;
+
+            float cl, cr;
+            if (cutBody)
+            {
+                RowSpan(x, y, w, h, rowc, out cl, out cr);
+            }
+            else
+            {
+                RowSpan(ix0, iy0, iw, ih, rowc, out cl, out cr);
+                // The inner shape can fail to reach this row (it is a shorter
+                // copy sitting inside the outer one): then the whole span is band.
+                if (cr <= cl) { EmitRow(l, r, py, c); continue; }
+            }
+
+            if (cr <= cl) { EmitRow(l, r, py, c); continue; }
+            if (cl > l) EmitRow(l, cl, py, c);
+            if (r > cr) EmitRow(cr, r, py, c);
+        }
+    }
+
+    // Column walk, kept for the taller-than-wide degenerate case only.
+    private static void DrawRingBandCols(float x, float y, float w, float h,
+                                         float ox, float oy, float gOut, float gIn, Color c)
+    {
         float ox0 = x + ox - gOut,     oy0 = y + oy - gOut;
         float ow = w + gOut * 2f,      oh = h + gOut * 2f;
         float ix0 = x + ox - gIn,      iy0 = y + oy - gIn;
@@ -660,29 +718,70 @@ public class TechPopupEntity : Entity
             return;
         }
 
-        // True rounded ends. Every 1px column of the pill is drawn exactly once,
-        // by exactly one Draw.Rect, and its height is the circle's chord at that
-        // column's centre.
+        // A pill is wider than it is tall, always. In that case every row of it
+        // is ONE contiguous horizontal span, so a row costs exactly one quad -
+        // which is why this walks rows and not columns.
         //
-        // The previous version drew the middle band as one wide rect and then
-        // the caps as columns running from x+0 to x+r-1. When r came out
-        // fractional (it does: the pill height is a text height plus padding)
-        // the last cap column and the middle band either overlapped by a
-        // fraction of a pixel or left a sliver of a gap between them - with the
-        // new translucent glass you could plainly see that seam as a vertical
-        // stripe where the cap met the band, because the overlap got blended
-        // twice. One column, one draw call: no seam is possible.
-        float r = Math.Min(h * 0.5f, w * 0.5f);
-        int cols = (int)MathF.Ceiling(w);
-
-        for (int i = 0; i < cols; i++)
+        // It used to walk columns (one quad per pixel of width, ~150 per pill).
+        // That is correct but it is also why a dozen labels on screen cost
+        // thousands of draw calls: the silhouette is only ~30 rows tall, so
+        // drawing it the short way round is a straight 5x saving, and the shape
+        // is the same set of pixels (the ends just quantise along the other
+        // axis, by at most one pixel).
+        //
+        // A taller-than-wide pill cannot use the row walk (its caps sit on the
+        // top and bottom edges, not the left and right), so that degenerate
+        // case keeps the old column path. It never happens with a label, and
+        // walking columns is cheap when w < h anyway.
+        if (w < h)
         {
-            float chord = CapsuleChord(i + 0.5f, r, w);
-            float colH = MathF.Round(h * chord);
-            if (colH <= 0f) continue;
-
-            Draw.Rect(x + i, MathF.Round(y + (h - colH) * 0.5f), 1f, colH, color);
+            float rc = Math.Min(h * 0.5f, w * 0.5f);
+            int cols = (int)MathF.Ceiling(w);
+            for (int i = 0; i < cols; i++)
+            {
+                float chord = CapsuleChord(i + 0.5f, rc, w);
+                float colH = MathF.Round(h * chord);
+                if (colH <= 0f) continue;
+                Draw.Rect(x + i, MathF.Round(y + (h - colH) * 0.5f), 1f, colH, color);
+            }
+            return;
         }
+
+        int py0 = (int)MathF.Round(y);
+        int rows = (int)MathF.Round(h);
+        for (int i = 0; i < rows; i++)
+        {
+            int py = py0 + i;
+            RowSpan(x, y, w, h, py + 0.5f, out float l, out float r);
+            EmitRow(l, r, py, color);
+        }
+    }
+
+    // Horizontal span of a capsule at the centre of row `py`.
+    // l > r means "this row misses the shape entirely".
+    //
+    // The two caps are discs of radius r centred on the vertical middle, so a
+    // row that is `d` away from that middle is `sqrt(r^2 - d^2)` wide on each
+    // side. Same geometry CapsuleChord encodes for columns, just transposed.
+    private static void RowSpan(float x, float y, float w, float h, float py,
+                                out float l, out float r)
+    {
+        float rad = Math.Min(h * 0.5f, w * 0.5f);
+        float d = py - (y + h * 0.5f);
+        if (d < 0f) d = -d;
+        if (rad <= 0f || d >= rad) { l = 0f; r = -1f; return; }
+        float half = MathF.Sqrt(rad * rad - d * d);
+        l = (x + rad) - half;
+        r = (x + w - rad) + half;
+    }
+
+    private static void EmitRow(float l, float r, int py, Color c)
+    {
+        if (r <= l) return;
+        int x0 = (int)MathF.Round(l);
+        int x1 = (int)MathF.Round(r);
+        if (x1 <= x0) return;
+        Draw.Rect(x0, py, x1 - x0, 1f, c);
     }
 
     // Height of the capsule at `px` (a column centre in local coordinates), as
